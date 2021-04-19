@@ -1,39 +1,47 @@
 import os
-import glob
 import threading
-import pandas
-import csv
-
+from queue import Queue
 
 full_path='./data'
-image_file=[]
+queue_list=Queue()
 
-def file(path,file):  
-    image=glob.glob(os.path.join(path,'*.jpg'))
-    image_file.append(image)
+# look for jpg file paths with jpg extension and add it to list
+def read_from_directory(data):
+    '''
+    Take path as input
+    Returns list containing names of image file with jpg extension
+    '''
 
+    for entry in os.listdir(data):
 
-def directory(path):
-    for i in os.scandir(path):
-        if i.is_file():
-            print(i)
-            file(path,i)
-        if i.is_dir():
-            print(i)
-            directory(i)
+        if os.path.isfile(os.path.join(data,entry)):
+            pathname=os.path.join(data,entry)
+            a=pathname.endswith('.jpg')
+            if a:
+                queue_list.put(pathname)
 
-def add_to_csv(data):
-        with open('innovators1.csv', 'a') as file:
-            writer = csv.writer(file)
-            writer.writerows(data)
+        if os.path.isdir(os.path.join(data,entry)):
+            read_from_directory(os.path.join(data,entry))
+
+# add data to file
+def add_to_file(data,name_of_file):
+    '''
+    Takes list as an input
+    Writes data to file
+    '''
+    while True:
+        name_of_file.write(queue_list.get()+'\n')
+
 
 if __name__=='__main__':
-    t1=threading.Thread(target=directory(full_path))
-    t2=threading.Thread(target=add_to_csv(image_file))
-    
+    file1 = open('data.txt', 'a')
+
+    t1=threading.Thread(target=read_from_directory,args=(full_path,))
+    t2=threading.Thread(target=add_to_file,args=(queue_list, file1))
+
     t1.start()
     t2.start()
     
     t1.join()
     t2.join()
-    print(len(image_file))
+    file1.close()
