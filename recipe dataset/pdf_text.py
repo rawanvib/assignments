@@ -1,6 +1,8 @@
 import os
 import cv2
 import re
+import pandas as pd
+import csv
 import pymongo
 import pytesseract
 from pdf2image import convert_from_path
@@ -17,16 +19,16 @@ def pdf_to_image(directory_path, list_pdfs):
         os.makedirs(directory_path)
 
     for pdf in list_pdfs:
-        pages = convert_from_path(pdf, 300, first_page=7, fmt='jpg', output_folder=directory_path)
-        # counter = 1
-        # pdf_file_name = os.path.splitext(pdf)[0]
-        #
-        # pdf_file_name = re.sub('/', '_', pdf_file_name)
-        #
-        # for page in pages:
-        #     image_file_name = directory_path + pdf_file_name + '_' + str(counter) + '.jpg'
-        #     counter = counter + 1
-        #     page.save(image_file_name, 'JPEG')
+        pages = convert_from_path(pdf, 300, first_page=7, fmt='jpg')
+        counter = 1
+        pdf_file_name = os.path.splitext(pdf)[0]
+
+        pdf_file_name = re.sub('/', '_', pdf_file_name)
+
+        for page in pages:
+            image_file_name = directory_path + pdf_file_name + '_' + str(counter) + '.jpg'
+            counter = counter + 1
+            page.save(image_file_name, 'JPEG')
 
 
 def image_to_data(dir_name, col):
@@ -88,29 +90,23 @@ def image_to_data(dir_name, col):
                     counter = counter + 1
 
             # if len_sentence == counter or len_sentence -1 == counter or len_sentence - 2 == counter or len_sentence - 3 == counter:
-
-
             if sentence[0].isupper():
                 count_full_stop_method = 0
                 for i in new_list:
                     search_return = re.findall(r"\.", i)
                     count_full_stop_method = count_full_stop_method + len(search_return)
-
-                if count_full_stop_method >= len_sentence//2 or count_full_stop_method==len_sentence:
+                if count_full_stop_method >= len_sentence//2 or count_full_stop_method == len_sentence:
                     method.append(new_list)
                 else:
                     if len_sentence == counter or len_sentence // 2 < counter:
                         ingredients.append(new_list)
                     else:
                         method.append(new_list)
-
             else:
                 if len_sentence == counter or len_sentence // 2 < counter:
                     ingredients.append(new_list)
                 else:
                     method.append(new_list)
-
-
 
         single_document['ingredients'] = ingredients
         single_document['method'] = method
@@ -122,26 +118,36 @@ def image_to_data(dir_name, col):
 def document_to_db(data, col):
     col.insert_one(data)
 
+def db_to_csv(col, filename):
+    list_data=list(col.find({}))
+    df=pd.DataFrame(list_data)
+    df.pop('_id')
+    df.to_csv(filename, index=True)
+
 if __name__ == '__main__':
+
     my_client = pymongo.MongoClient("mongodb://localhost:27017/")
-    my_db = my_client['recipe_demo_changed_final2']
+    my_db = my_client['recipe_demo_changed_final3']
     my_col = my_db['dataset']
 
-    image_directory = 'images_folder2/'
+    csv_filename='db_csv.csv'
+
+    image_directory = 'images_folder3/'
     directory_name = "/home/webwerks/Desktop/ocr/pdfs"
 
     pdf_with_score = pdf_scorer.path_to_pdf_file(directory_name)
     #print(pdf_with_score)
     list_pdf_with_good_score = []
     for pdf_file, score in pdf_with_score.items():
-        if score > 80 :
+        if score > 82 :
             list_pdf_with_good_score.append(pdf_file)
 
-    print(list_pdf_with_good_score)
+    #print(list_pdf_with_good_score)
     pdf_to_image(image_directory, list_pdf_with_good_score)
     image_to_data(image_directory, my_col)
+    db_to_csv(my_col,csv_filename)
 
 
 
-# image annotation
-#https://towardsdatascience.com/image-data-labelling-and-annotation-everything-you-need-to-know-86ede6c684b1
+
+
