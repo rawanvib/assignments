@@ -13,7 +13,7 @@ import pdf_scorer
 #     PDFSyntaxError
 # )
 
-
+#this function converts all pdf pages into images and assigning each image a name which has directory name along with the counter of the pages in that pdf
 def pdf_to_image(directory_path, list_pdfs):
     if not os.path.exists(directory_path):
         os.makedirs(directory_path)
@@ -30,17 +30,19 @@ def pdf_to_image(directory_path, list_pdfs):
             counter = counter + 1
             page.save(image_file_name, 'JPEG')
 
-
+# function which returns a dictionary to another function with title, ingredients and method content
 def image_to_data(dir_name, col):
     for image_path in os.listdir(dir_name):
         image = cv2.imread(os.path.join(dir_name, image_path))
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 5, 5)
 
+        # to select paragraph 
         rect_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 25))
 
         dilation = cv2.dilate(thresh, rect_kernel, iterations=2)
-
+        
+        # get the contours of each paragraph
         contours, hierarchy = cv2.findContours(dilation, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         image2 = image.copy()
@@ -50,16 +52,19 @@ def image_to_data(dir_name, col):
             x, y, w, h = cv2.boundingRect(cnt)
             box.append((x, y, x + w, y + h))
 
+        # box[-1] always points at the title    
         box0 = box[-1]
         x, y, l, b = box0
         cropped = image2[y:b, x:l]
         text = pytesseract.image_to_string(cropped)
 
         single_document = {}
-
         single_document['title'] = text
-
+        
+        # removed bounding box related to title
         box = box[:-1]
+        
+        # based on the pdfs selected box[0] and box[1] will always have footer content and page number of a pdf which we don't want
         box = box[2:]
 
         ingredients = []
@@ -90,11 +95,15 @@ def image_to_data(dir_name, col):
                     counter = counter + 1
 
             # if len_sentence == counter or len_sentence -1 == counter or len_sentence - 2 == counter or len_sentence - 3 == counter:
+            # checks if first letter is capital or not, if is it may be a part of method
             if sentence[0].isupper():
+                
+                # checking if paragraph has full stops to confirm this is method of ingredients
                 count_full_stop_method = 0
                 for i in new_list:
                     search_return = re.findall(r"\.", i)
                     count_full_stop_method = count_full_stop_method + len(search_return)
+                    
                 if count_full_stop_method >= len_sentence//2 or count_full_stop_method == len_sentence:
                     method.append(new_list)
                 else:
@@ -110,14 +119,16 @@ def image_to_data(dir_name, col):
 
         single_document['ingredients'] = ingredients
         single_document['method'] = method
-
         # print(single_document)
         document_to_db(single_document, col)
         single_document.clear()
 
+        
+# add data to database one by one        
 def document_to_db(data, col):
     col.insert_one(data)
 
+# 
 def db_to_csv(col, filename):
     list_data=list(col.find({}))
     df=pd.DataFrame(list_data)
